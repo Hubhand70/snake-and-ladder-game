@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake and Ladder Game</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        canvas {
+            border: 3px solid #333;
+            background-color: #fff;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+        #rollButton {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        #rollButton:hover {
+            background-color: #45a049;
+        }
+        #rollButton:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #gameInfo {
+            margin-top: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #555;
+            height: 25px;
+        }
+        #diceDisplay {
+            font-size: 48px;
+            margin-top: 10px;
+            height: 60px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Snake and Ladder</h1>
+    <canvas id="gameCanvas" width="600" height="600"></canvas>
+    <div class="controls">
+        <button id="rollButton">Roll Dice</button>
+        <div id="gameInfo">Player 1's Turn</div>
+        <div id="diceDisplay"></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const rollButton = document.getElementById('rollButton');
+        const gameInfo = document.getElementById('gameInfo');
+        const diceDisplay = document.getElementById('diceDisplay');
+
+        const BOARD_SIZE = 10;
+        const CELL_SIZE = canvas.width / BOARD_SIZE;
+
+        let players = [
+            { pos: 0, color: 'red' },
+            { pos: 0, color: 'blue' }
+        ];
+        let currentPlayerIndex = 0;
+        let isAnimating = false;
+        let diceValue = 0;
+
+        // Define snakes and ladders: start -> end
+        const snakes = {
+            16: 6,
+            47: 26,
+            49: 11,
+            56: 53,
+            62: 19,
+            64: 60,
+            87: 24,
+            93: 73,
+            95: 75,
+            98: 78
+        };
+
+        const ladders = {
+            1: 38,
+            4: 14,
+            9: 31,
+            21: 42,
+            28: 84,
+            36: 44,
+            51: 67,
+            71: 91,
+            80: 100
+        };
+
+        function getCellCenter(cellNumber) {
+            if (cellNumber < 1 || cellNumber > 100) return null;
+            cellNumber--; // use 0-99 index
+            let row = Math.floor(cellNumber / BOARD_SIZE);
+            let col = cellNumber % BOARD_SIZE;
+            // Snaking pattern: even rows (from top) go right-to-left, odd rows go left-to-right
+            if (row % 2 === 0) {
+                col = BOARD_SIZE - 1 - col;
+            }
+            let x = col * CELL_SIZE + CELL_SIZE / 2;
+            let y = (BOARD_SIZE - 1 - row) * CELL_SIZE + CELL_SIZE / 2;
+            return { x, y };
+        }
+
+        function drawBoard() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < 100; i++) {
+                let row = Math.floor(i / BOARD_SIZE);
+                let col = i % BOARD_SIZE;
+                let x = col * CELL_SIZE;
+                let y = row * CELL_SIZE;
+
+                // Checkerboard pattern
+                if ((row + col) % 2 === 0) {
+                    ctx.fillStyle = '#f0d9b5';
+                } else {
+                    ctx.fillStyle = '#b58863';
+                }
+                ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+                
+                // Draw numbers
+                ctx.fillStyle = '#333';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const cellNum = 100 - i;
+                const center = getCellCenter(cellNum);
+                ctx.fillText(cellNum, center.x, center.y);
+            }
+        }
+
+        function drawSnakesAndLadders() {
+            ctx.lineWidth = 5;
+            
+            // Draw Ladders
+            ctx.strokeStyle = 'green';
+            for (let start in ladders) {
+                const startPos = getCellCenter(parseInt(start));
+                const endPos = getCellCenter(ladders[start]);
+                ctx.beginPath();
+                ctx.moveTo(startPos.x, startPos.y);
+                ctx.lineTo(endPos.x, endPos.y);
+                ctx.stroke();
+            }
+
+            // Draw Snakes
+            ctx.strokeStyle = 'red';
+            for (let start in snakes) {
+                const startPos = getCellCenter(parseInt(start));
+                const endPos = getCellCenter(snakes[start]);
+                ctx.beginPath();
+                ctx.moveTo(startPos.x, startPos.y);
+                ctx.lineTo(endPos.x, endPos.y);
+                ctx.stroke();
+            }
+        }
+
+        function drawPlayers() {
+            players.forEach((player, index) => {
+                if (player.pos > 0 && player.pos <= 100) {
+                    const center = getCellCenter(player.pos);
+                    ctx.fillStyle = player.color;
+                    ctx.beginPath();
+                    // Offset players slightly so they don't overlap perfectly
+                    const offsetX = (index === 0) ? -10 : 10;
+                    ctx.arc(center.x + offsetX, center.y, 12, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            });
+        }
+
+        function render() {
+            drawBoard();
+            drawSnakesAndLadders();
+            drawPlayers();
+        }
+
+        function movePlayer(playerIndex, targetPos) {
+            return new Promise(resolve => {
+                const player = players[playerIndex];
+                const step = player.pos < targetPos ? 1 : -1;
+                const interval = setInterval(() => {
+                    player.pos += step;
+                    render();
+                    if (player.pos === targetPos) {
+                        clearInterval(interval);
+                        resolve();
+                    }
+                }, 200); // Animation speed
+            });
+        }
+
+        async function handleTurn() {
+            if (isAnimating) return;
+            isAnimating = true;
+            rollButton.disabled = true;
+            diceDisplay.textContent = '';
+
+            diceValue = Math.floor(Math.random() * 6) + 1;
+            diceDisplay.textContent = `🎲 ${diceValue}`;
+            
+            const player = players[currentPlayerIndex];
+            let finalPos = player.pos + diceValue;
+            if (finalPos > 100) {
+                finalPos = 100; // Can't go past 100
+            }
+
+            await movePlayer(currentPlayerIndex, finalPos);
+
+            // Check for snake or ladder
+            if (snakes[finalPos]) {
+                gameInfo.textContent = `Oh no, a snake!`;
+                await movePlayer(currentPlayerIndex, snakes[finalPos]);
+            } else if (ladders[finalPos]) {
+                gameInfo.textContent = `Yay, a ladder!`;
+                await movePlayer(currentPlayerIndex, ladders[finalPos]);
+            }
+
+            // Check for win
+            if (player.pos === 100) {
+                gameInfo.textContent = `🎉 Player ${currentPlayerIndex + 1} Wins! 🎉`;
+                rollButton.disabled = true;
+                return;
+            }
+
+            // Switch player
+            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+            gameInfo.textContent = `Player ${currentPlayerIndex + 1}'s Turn`;
+            rollButton.disabled = false;
+            isAnimating = false;
+        }
+
+        rollButton.addEventListener('click', handleTurn);
+
+        // Initial render
+        render();
+    </script>
+</body>
+</html>
